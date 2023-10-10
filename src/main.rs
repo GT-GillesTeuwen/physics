@@ -78,8 +78,8 @@ fn main() {
             y: 400.0 as f32,
         },
         body: RigidBody {
-            mass: 200.0,
-            velocity: Vector2 { x:  10.0, y: -20.0 },
+            mass: 1.0,
+            velocity: Vector2 { x:  10.0, y: -445.0 },
             acceleration: Vector2 { x: 0.0, y: 0.0 },
         },
         material: Material {
@@ -96,8 +96,8 @@ fn main() {
             y: 400.0 as f32,
         },
         body: RigidBody {
-            mass: 40.0,
-            velocity: Vector2 { x: -50.0, y: 100.0 },
+            mass: 4000.0,
+            velocity: Vector2 { x: 0.0, y: 0.0 },
             acceleration: Vector2 { x: 0.0, y: 0.0 },
         },
         material: Material {
@@ -153,7 +153,8 @@ fn main() {
     let initial_simulation_objects = simulation_objects.clone();
     'running: loop {
         let current_ticks = timer_subsystem.ticks();
-        let delta_time = (current_ticks - last_ticks) as f32 / 1000.0; // in seconds
+        let  delta_time = (current_ticks - last_ticks) as f32 / 1000.0; // in seconds
+       
         last_ticks = current_ticks;
 
         for event in event_pump.poll_iter() {
@@ -245,28 +246,28 @@ fn main() {
                     keycode: Some(sdl2::keyboard::Keycode::Up),
                     ..
                 } => {
-                    simulation_objects[selected_index].body.velocity.y -= 10.0;
+                    simulation_objects[selected_index].body.velocity.y -= 5.0;
                     velocity_changed = true;
                 }
                 sdl2::event::Event::KeyDown {
                     keycode: Some(sdl2::keyboard::Keycode::Down),
                     ..
                 } => {
-                    simulation_objects[selected_index].body.velocity.y += 10.0;
+                    simulation_objects[selected_index].body.velocity.y += 5.0;
                     velocity_changed = true;
                 }
                 sdl2::event::Event::KeyDown {
                     keycode: Some(sdl2::keyboard::Keycode::Left),
                     ..
                 } => {
-                    simulation_objects[selected_index].body.velocity.x -= 10.0;
+                    simulation_objects[selected_index].body.velocity.x -= 5.0;
                     velocity_changed = true;
                 }
                 sdl2::event::Event::KeyDown {
                     keycode: Some(sdl2::keyboard::Keycode::Right),
                     ..
                 } => {
-                    simulation_objects[selected_index].body.velocity.x += 10.0;
+                    simulation_objects[selected_index].body.velocity.x += 5.0;
                     velocity_changed = true;
                 }
                 sdl2::event::Event::KeyDown {
@@ -441,7 +442,7 @@ fn predict(
     // Initialize an array to store the predicted positions
     let mut predicted_positions: Vec<Vec<Vector2>> = Vec::new();
     // Simulate the next N steps
-    let steps = 2000;
+    let steps = 50000;
     let mut temp_simulation_objects = simulation_objects.clone();
     for _ in 0..steps {
         let mut future_positions: Vec<Vector2> = Vec::new();
@@ -450,8 +451,8 @@ fn predict(
 
         // Apply forces and update velocities and positions for each object
         physics::apply_forces(&mut temp_simulation_objects, 0, event_pump); // Assuming you have access to event_pump
-        physics::update_velocities(&mut temp_simulation_objects, 0.1); // Assuming delta_time is known
-        physics::handle_collisions(&mut temp_simulation_objects, 0.1);
+        physics::update_velocities(&mut temp_simulation_objects, 0.0075); // Assuming delta_time is known
+        physics::handle_collisions(&mut temp_simulation_objects, 0.0075);
         // Store the future positions
         for object in &temp_simulation_objects {
             future_positions.push(object.position);
