@@ -1,4 +1,4 @@
-
+use events::handle_reset_to_initial_conditions;
 use sdl2::gfx::primitives::DrawRenderer;
 use sdl2::pixels::Color;
 use sdl2::rect::Rect;
@@ -10,6 +10,26 @@ use sdl2::EventPump;
 mod events;
 mod physics;
 mod render;
+
+enum EditableField {
+    Mass,
+    VelocityX,
+    VelocityY,
+    PositionX,
+    PositionY,
+    Radius,
+    // Add more fields as needed
+}
+
+enum MenuState {
+    Closed,
+    Open(usize, EditableField, String), // Added EditableField here
+}
+
+enum AppState {
+    Normal,
+    Menu(MenuState),
+}
 
 #[derive(Clone, Copy)]
 pub struct Vector2 {
@@ -60,21 +80,22 @@ fn main() {
     let screen_width = 1000;
     let screen_height = 800;
     let mut selected_index = 0;
-    
-
 
     let mut simulation_objects: Vec<SimulationObject> = Vec::new();
 
     simulation_objects.push(SimulationObject {
-        shape: Circle { radius: 20.0 },
+        shape: Circle { radius: 10.0 },
         selected: false,
         position: Vector2 {
             x: 700.0 as f32,
             y: 400.0 as f32,
         },
         body: RigidBody {
-            mass: 1.0,
-            velocity: Vector2 { x:  10.0, y: -445.0 },
+            mass: 0.000001,
+            velocity: Vector2 {
+                x: -90.0,
+                y: -435.0,
+            },
             acceleration: Vector2 { x: 0.0, y: 0.0 },
         },
         material: Material {
@@ -91,13 +112,33 @@ fn main() {
             y: 400.0 as f32,
         },
         body: RigidBody {
-            mass: 4000.0,
-            velocity: Vector2 { x: 0.0, y: 0.0 },
+            mass: 1000.0,
+            velocity: Vector2 { x: 20.0, y: 0.0 },
             acceleration: Vector2 { x: 0.0, y: 0.0 },
         },
         material: Material {
             restitution: 1.0,
             colour: Color::RED,
+        },
+
+        history: History { trail: Vec::new() },
+    });
+
+    simulation_objects.push(SimulationObject {
+        shape: Circle { radius: 25.0 },
+        selected: false,
+        position: Vector2 {
+            x: 500.0 as f32,
+            y: 50.0 as f32,
+        },
+        body: RigidBody {
+            mass: 1.0,
+            velocity: Vector2 { x: -410.0, y: 0.0 },
+            acceleration: Vector2 { x: 0.0, y: 0.0 },
+        },
+        material: Material {
+            restitution: 1.0,
+            colour: Color::GREEN,
         },
 
         history: History { trail: Vec::new() },
@@ -143,136 +184,253 @@ fn main() {
 
     let mut mouse_down = false;
 
+
+    let mut app_state = AppState::Normal;
+
     let mut predicted_positions = predict(&simulation_objects, &event_pump);
     let mut velocity_changed = false; // Add this flag
     let initial_simulation_objects = simulation_objects.clone();
+    let mut just_toggled_menu = false;
     'running: loop {
         let current_ticks = timer_subsystem.ticks();
-        let  delta_time = (current_ticks - last_ticks) as f32 / 1000.0; // in seconds
-       
+        let mut delta_time = (current_ticks - last_ticks) as f32 / 1000.0; // in seconds
+        delta_time=0.0075;
         last_ticks = current_ticks;
 
         for event in event_pump.poll_iter() {
-            match event {
-                sdl2::event::Event::Quit { .. }
-                | sdl2::event::Event::KeyDown {
-                    keycode: Some(sdl2::keyboard::Keycode::Escape),
-                    ..
-                } => {
-                    break 'running;
+            match &mut app_state {
+                AppState::Normal => {
+                    match event {
+                        sdl2::event::Event::Quit { .. }
+                        | sdl2::event::Event::KeyDown {
+                            keycode: Some(sdl2::keyboard::Keycode::Escape),
+                            ..
+                        } => {
+                            break 'running;
+                        }
+                        sdl2::event::Event::KeyDown {
+                            keycode: Some(sdl2::keyboard::Keycode::Tab),
+                            ..
+                        } => {
+                            events::handle_tab_key(&mut simulation_objects, &mut selected_index);
+                        }
+                        sdl2::event::Event::MouseButtonDown { x, y, .. } => {
+                            mouse_down = true;
+                            events::handle_mouse_down(
+                                x,
+                                y,
+                                &mut prev_mouse_pos,
+                                &mut simulation_objects,
+                                &mut selected_index,
+                            );
+                        }
+
+                        sdl2::event::Event::MouseButtonUp { .. } => {
+                            mouse_down = false;
+                            events::handle_mouse_up();
+                        }
+                        sdl2::event::Event::KeyDown {
+                            keycode: Some(sdl2::keyboard::Keycode::Space),
+                            ..
+                        } => {
+                            events::handle_space_key(&mut is_paused);
+                        }
+                        sdl2::event::Event::KeyDown {
+                            keycode: Some(sdl2::keyboard::Keycode::D),
+                            ..
+                        } => {
+                            events::handle_single_step(&mut single_step);
+                        }
+                        sdl2::event::Event::MouseMotion { x, y, .. } => {
+                            if mouse_down {
+                                let current_mouse_pos = Vector2 {
+                                    x: x as f32,
+                                    y: y as f32,
+                                };
+                                let dx = current_mouse_pos.x - prev_mouse_pos.x;
+                                let dy = current_mouse_pos.y - prev_mouse_pos.y;
+
+                                // Update all object positions
+                                for object in simulation_objects.iter_mut() {
+                                    object.position.x += dx;
+                                    object.position.y += dy;
+                                    // Update all trail positions (assuming trails is a Vec<Vector2>)
+                                    for trail in &mut object.history.trail {
+                                        trail.x += dx;
+                                        trail.y += dy;
+                                    }
+                                }
+
+                                for p in predicted_positions.iter_mut() {
+                                    for q in p {
+                                        q.x += dx;
+                                        q.y += dy;
+                                    }
+                                }
+
+                                prev_mouse_pos = current_mouse_pos;
+                            }
+                        }
+                        sdl2::event::Event::KeyDown {
+                            keycode: Some(sdl2::keyboard::Keycode::Up),
+                            ..
+                        } => {
+                            events::handle_velocity_change(
+                                selected_index,
+                                &mut simulation_objects,
+                                0.0,
+                                -5.0,
+                            );
+                            velocity_changed = true;
+                        }
+                        sdl2::event::Event::KeyDown {
+                            keycode: Some(sdl2::keyboard::Keycode::Down),
+                            ..
+                        } => {
+                            events::handle_velocity_change(
+                                selected_index,
+                                &mut simulation_objects,
+                                0.0,
+                                5.0,
+                            );
+                            velocity_changed = true;
+                        }
+                        sdl2::event::Event::KeyDown {
+                            keycode: Some(sdl2::keyboard::Keycode::Left),
+                            ..
+                        } => {
+                            events::handle_velocity_change(
+                                selected_index,
+                                &mut simulation_objects,
+                                -5.0,
+                                0.0,
+                            );
+                            velocity_changed = true;
+                        }
+                        sdl2::event::Event::KeyDown {
+                            keycode: Some(sdl2::keyboard::Keycode::Right),
+                            ..
+                        } => {
+                            events::handle_velocity_change(
+                                selected_index,
+                                &mut simulation_objects,
+                                5.0,
+                                0.0,
+                            );
+                            velocity_changed = true;
+                        }
+                        sdl2::event::Event::KeyDown {
+                            keycode: Some(sdl2::keyboard::Keycode::R),
+                            ..
+                        } => {
+                            handle_reset_to_initial_conditions(
+                                &mut simulation_objects,
+                                &initial_simulation_objects,
+                            );
+                            velocity_changed = true;
+                        }
+                        sdl2::event::Event::KeyDown {
+                            keycode: Some(sdl2::keyboard::Keycode::M),
+                            ..
+                        } => {
+                            just_toggled_menu = true;
+                            match app_state {
+                                AppState::Normal => {
+                                    app_state = AppState::Menu(MenuState::Open(
+                                        selected_index,
+                                        EditableField::PositionX,
+                                        simulation_objects[selected_index].position.x.to_string(),
+                                    ));
+                                }
+                                AppState::Menu(_) => {
+                                    app_state = AppState::Normal;
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
+                    continue;
                 }
-                sdl2::event::Event::KeyDown {
-                    keycode: Some(sdl2::keyboard::Keycode::Tab),
-                    ..
-                } => {
-                    simulation_objects[selected_index].selected = false;
-                    selected_index = (selected_index + 1) % simulation_objects.len();
-                    simulation_objects[selected_index].selected = true;
-                }
-                sdl2::event::Event::MouseButtonDown { x, y, .. } => {
-                    mouse_down = true;
-                    prev_mouse_pos = Vector2 {
-                        x: x as f32,
-                        y: y as f32,
-                    };
-                    for (i, object) in simulation_objects.iter().enumerate() {
-                        if circles_intersect(
-                            x as f32,
-                            y as f32,
-                            0.0,
-                            object.position.x,
-                            object.position.y,
-                            object.shape.radius,
-                        ) {
-                            simulation_objects[selected_index].selected = false;
-                            selected_index = i;
-                            simulation_objects[selected_index].selected = true;
-                            break;
+                AppState::Menu(menu_state) => match menu_state {
+                    MenuState::Closed => {}
+                    MenuState::Open(index, field, input) => {
+                        match event {
+                            sdl2::event::Event::KeyDown {
+                                keycode: Some(sdl2::keyboard::Keycode::Return),
+                                ..
+                            } => {
+                                if let Ok(value) = input.parse::<f32>() {
+                                    match field {
+                                        EditableField::Mass => {
+                                            simulation_objects[*index].body.mass = value; 
+                                        }
+                                        EditableField::VelocityX => {
+                                            simulation_objects[*index].body.velocity.x = value; 
+                                        }
+                                        EditableField::VelocityY => todo!(),
+                                        EditableField::PositionX => {
+                                            simulation_objects[*index].position.x = value; 
+                                        },
+                                        EditableField::PositionY => todo!(),
+                                        EditableField::Radius => todo!(),
+                                    }
+                                }
+                                app_state = AppState::Normal;
+                                velocity_changed=true;
+                            }
+                            sdl2::event::Event::KeyDown {
+                                keycode: Some(sdl2::keyboard::Keycode::Backspace),
+                                ..
+                            } => {
+                                if (input.len() > 0) {
+                                    input.pop();
+                                }
+                            }
+                            sdl2::event::Event::TextInput { text, .. } => {
+                                if just_toggled_menu {
+                                    just_toggled_menu = false;
+                                    continue;
+                                }
+                                input.push_str(&text);
+                            }
+                            sdl2::event::Event::KeyDown {
+                                keycode: Some(sdl2::keyboard::Keycode::Escape),
+                                ..
+                            } => {
+                                app_state = AppState::Normal;
+                            }sdl2::event::Event::MouseButtonDown { x, y, .. } => {
+                                mouse_down = true;
+                                events::handle_mouse_down(
+                                    x,
+                                    y,
+                                    &mut prev_mouse_pos,
+                                    &mut simulation_objects,
+                                    index,  // Pass the selected index from the menu state
+                                );
+                            },
+                            sdl2::event::Event::MouseButtonUp { .. } => {
+                                mouse_down = false;
+                                events::handle_mouse_up();
+                            },
+                            sdl2::event::Event::MouseMotion { x, y, .. } => {
+                                if mouse_down {
+                                    let current_mouse_pos = Vector2 { x: x as f32, y: y as f32 };
+                                    let dx = current_mouse_pos.x - prev_mouse_pos.x;
+                                    let dy = current_mouse_pos.y - prev_mouse_pos.y;
+        
+                                    // Update only the selected object's position
+                                    simulation_objects[*index].position.x += dx;
+                                    simulation_objects[*index].position.y += dy;
+        
+                                    prev_mouse_pos = current_mouse_pos;
+                                    velocity_changed=true;
+                                }
+                            },
+        
+                            _ => {}
                         }
                     }
                 }
-
-                sdl2::event::Event::MouseButtonUp {  .. } => {
-                    mouse_down = false;
-                }
-                sdl2::event::Event::KeyDown {
-                    keycode: Some(sdl2::keyboard::Keycode::Space),
-                    ..
-                } => {
-                    is_paused = !is_paused;
-                }
-                sdl2::event::Event::KeyDown {
-                    keycode: Some(sdl2::keyboard::Keycode::D),
-                    ..
-                } => {
-                    single_step = true;
-                }
-                sdl2::event::Event::MouseMotion { x, y, .. } => {
-                    if mouse_down {
-                        let current_mouse_pos = Vector2 {
-                            x: x as f32,
-                            y: y as f32,
-                        };
-                        let dx = current_mouse_pos.x - prev_mouse_pos.x;
-                        let dy = current_mouse_pos.y - prev_mouse_pos.y;
-
-                        // Update all object positions
-                        for object in simulation_objects.iter_mut() {
-                            object.position.x += dx;
-                            object.position.y += dy;
-                            // Update all trail positions (assuming trails is a Vec<Vector2>)
-                            for trail in &mut object.history.trail {
-                                trail.x += dx;
-                                trail.y += dy;
-                            }
-                        }
-
-                        for p in predicted_positions.iter_mut() {
-                            for q in p {
-                                q.x += dx;
-                                q.y += dy;
-                            }
-                        }
-
-                        prev_mouse_pos = current_mouse_pos;
-                    }
-                }
-                sdl2::event::Event::KeyDown {
-                    keycode: Some(sdl2::keyboard::Keycode::Up),
-                    ..
-                } => {
-                    simulation_objects[selected_index].body.velocity.y -= 5.0;
-                    velocity_changed = true;
-                }
-                sdl2::event::Event::KeyDown {
-                    keycode: Some(sdl2::keyboard::Keycode::Down),
-                    ..
-                } => {
-                    simulation_objects[selected_index].body.velocity.y += 5.0;
-                    velocity_changed = true;
-                }
-                sdl2::event::Event::KeyDown {
-                    keycode: Some(sdl2::keyboard::Keycode::Left),
-                    ..
-                } => {
-                    simulation_objects[selected_index].body.velocity.x -= 5.0;
-                    velocity_changed = true;
-                }
-                sdl2::event::Event::KeyDown {
-                    keycode: Some(sdl2::keyboard::Keycode::Right),
-                    ..
-                } => {
-                    simulation_objects[selected_index].body.velocity.x += 5.0;
-                    velocity_changed = true;
-                }
-                sdl2::event::Event::KeyDown {
-                    keycode: Some(sdl2::keyboard::Keycode::R),
-                    ..
-                } => {
-                    simulation_objects = initial_simulation_objects.clone();
-                    velocity_changed = true;
-                }
-                _ => {}
             }
         }
 
@@ -345,25 +503,44 @@ fn main() {
         let texture_creator = canvas.texture_creator();
         let selected_object = &simulation_objects[selected_index];
         let info = format!(
-            "A: ({:.2},{:.2}), V: ({:.2}, {:.2}), P: ({:.2}, {:.2})",
+            "A: ({:.2},{:.2}), V: ({:.2}, {:.2}), P: ({:.2}, {:.2}), M: {:.2}",
             selected_object.body.acceleration.x,
             selected_object.body.acceleration.y,
             selected_object.body.velocity.x,
             selected_object.body.velocity.y,
             selected_object.position.x,
-            selected_object.position.y
+            selected_object.position.y,
+            selected_object.body.mass // Include mass here
         );
         render_text(&mut canvas, &texture_creator, &font, &info, 10, 10);
+
+        match &app_state {
+            AppState::Normal => {
+                // ... (existing rendering for normal state)
+            }
+            AppState::Menu(menu_state) => {
+                match menu_state {
+                    MenuState::Closed => {
+                        // Do nothing if the menu is closed
+                    }
+                    MenuState::Open(index, field, input) => {
+                        // Draw your menu here based on the selected field
+                        let menu_text = match field {
+                            EditableField::Mass => format!("Edit Mass: {}", input),
+                            EditableField::VelocityX => format!("Edit X-Velocity: {}", input),
+                            EditableField::VelocityY => format!("Edit Y-Velocity: {}", input),
+                            EditableField::PositionX => format!("Edit X-Position: {}", input),
+                            EditableField::PositionY => format!("Edit Y-Position: {}", input),
+                            EditableField::Radius => format!("Edit Radius: {}", input),
+                        };
+                        render_text(&mut canvas, &texture_creator, &font, &menu_text, 10, 50);
+                    }
+                }
+            }
+        }
+
         canvas.present();
     }
-}
-
-fn circles_intersect(x1: f32, y1: f32, r1: f32, x2: f32, y2: f32, r2: f32) -> bool {
-    let dx = x2 - x1;
-    let dy = y2 - y1;
-    let distance_squared = dx * dx + dy * dy;
-    let radii_sum = r1 + r2;
-    distance_squared <= radii_sum * radii_sum
 }
 
 fn render_text(
@@ -393,7 +570,7 @@ fn predict(
     // Initialize an array to store the predicted positions
     let mut predicted_positions: Vec<Vec<Vector2>> = Vec::new();
     // Simulate the next N steps
-    let steps = 50000;
+    let steps = 3000;
     let mut temp_simulation_objects = simulation_objects.clone();
     for _ in 0..steps {
         let mut future_positions: Vec<Vector2> = Vec::new();
