@@ -1,7 +1,5 @@
-use std::ptr::null;
 
 use sdl2::gfx::primitives::DrawRenderer;
-use sdl2::keyboard::Scancode;
 use sdl2::pixels::Color;
 use sdl2::rect::Rect;
 use sdl2::render::{Canvas, TextureQuery};
@@ -59,14 +57,11 @@ fn main() {
     let mut is_paused = true;
     let mut single_step = false;
 
-    let dampening = 0.7;
     let screen_width = 1000;
     let screen_height = 800;
     let mut selected_index = 0;
-    let force_strength = 8000.0; // Now in units per second
-    let r = 40;
+    
 
-    let gravitational_constant = 1.0; // You can adjust this value
 
     let mut simulation_objects: Vec<SimulationObject> = Vec::new();
 
@@ -146,7 +141,7 @@ fn main() {
 
     let mut last_ticks = timer_subsystem.ticks();
 
-    let mut mouseDown = false;
+    let mut mouse_down = false;
 
     let mut predicted_positions = predict(&simulation_objects, &event_pump);
     let mut velocity_changed = false; // Add this flag
@@ -175,7 +170,7 @@ fn main() {
                     simulation_objects[selected_index].selected = true;
                 }
                 sdl2::event::Event::MouseButtonDown { x, y, .. } => {
-                    mouseDown = true;
+                    mouse_down = true;
                     prev_mouse_pos = Vector2 {
                         x: x as f32,
                         y: y as f32,
@@ -197,8 +192,8 @@ fn main() {
                     }
                 }
 
-                sdl2::event::Event::MouseButtonUp { x, y, .. } => {
-                    mouseDown = false;
+                sdl2::event::Event::MouseButtonUp {  .. } => {
+                    mouse_down = false;
                 }
                 sdl2::event::Event::KeyDown {
                     keycode: Some(sdl2::keyboard::Keycode::Space),
@@ -213,7 +208,7 @@ fn main() {
                     single_step = true;
                 }
                 sdl2::event::Event::MouseMotion { x, y, .. } => {
-                    if mouseDown {
+                    if mouse_down {
                         let current_mouse_pos = Vector2 {
                             x: x as f32,
                             y: y as f32,
@@ -363,56 +358,12 @@ fn main() {
     }
 }
 
-fn check_collision_axis(
-    current_index: usize,
-    other_index: usize,
-    future_positions: &[Vector2],
-    objects: &[SimulationObject],
-    axis: char,
-) -> bool {
-    let current_shape = objects[current_index].clone();
-    let other_shape = objects[other_index].clone();
-
-    let mut future_current_shape = current_shape;
-    let mut future_other_shape = other_shape;
-
-    match axis {
-        'x' => {
-            future_current_shape.position.x = future_positions[current_index].x;
-            future_other_shape.position.x = future_positions[other_index].x;
-        }
-        'y' => {
-            future_current_shape.position.y = future_positions[current_index].y;
-            future_other_shape.position.y = future_positions[other_index].y;
-        }
-        _ => panic!("Invalid axis"),
-    }
-
-    have_intersection(future_current_shape, future_other_shape)
-}
-
-fn have_intersection(s_o1: SimulationObject, s_o2: SimulationObject) -> bool {
-    circles_intersect(
-        s_o1.position.x,
-        s_o1.position.y,
-        s_o1.shape.radius,
-        s_o2.position.x,
-        s_o2.position.y,
-        s_o2.shape.radius,
-    )
-}
-
 fn circles_intersect(x1: f32, y1: f32, r1: f32, x2: f32, y2: f32, r2: f32) -> bool {
     let dx = x2 - x1;
     let dy = y2 - y1;
     let distance_squared = dx * dx + dy * dy;
     let radii_sum = r1 + r2;
     distance_squared <= radii_sum * radii_sum
-}
-
-fn apply_force(body: &mut RigidBody, force: Vector2) {
-    body.acceleration.x += force.x / body.mass;
-    body.acceleration.y += force.y / body.mass;
 }
 
 fn render_text(

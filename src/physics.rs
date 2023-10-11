@@ -111,7 +111,6 @@ pub fn handle_collisions(simulation_objects: &mut Vec<SimulationObject>, delta_t
     //// Step 3.1: Find all colliding pairs
     // Step 3: Handle collisions and adjust velocities
     let mut collisions: Vec<(usize, usize)> = Vec::new();
-    let m = simulation_objects.len();
     for i in 0..simulation_objects.len() {
         for j in i + 1..simulation_objects.len() {
             if circles_intersect(
@@ -129,9 +128,6 @@ pub fn handle_collisions(simulation_objects: &mut Vec<SimulationObject>, delta_t
 
     // Handle collisions
     for (i, other_index) in collisions {
-        let m1 = simulation_objects[i].body.mass;
-        let m2 = simulation_objects[other_index].body.mass;
-
         // Handle collision in a general way, affecting both x and y components
         let dx = future_positions[i].x - future_positions[other_index].x;
         let dy = future_positions[i].y - future_positions[other_index].y;
@@ -140,35 +136,29 @@ pub fn handle_collisions(simulation_objects: &mut Vec<SimulationObject>, delta_t
         let nx = dx / distance;
         let ny = dy / distance;
 
-        let tx = -ny;
-        let ty = nx;
+       
 
-        let dpTan1 =
-            simulation_objects[i].body.velocity.x * tx + simulation_objects[i].body.velocity.y * ty;
-        let dpTan2 = simulation_objects[other_index].body.velocity.x * tx
-            + simulation_objects[other_index].body.velocity.y * ty;
-
-        let dpNorm1 =
+        let dp_norm_1 =
             simulation_objects[i].body.velocity.x * nx + simulation_objects[i].body.velocity.y * ny;
-        let dpNorm2 = simulation_objects[other_index].body.velocity.x * nx
+        let dp_norm_2 = simulation_objects[other_index].body.velocity.x * nx
             + simulation_objects[other_index].body.velocity.y * ny;
 
         let m1 = simulation_objects[i].body.mass;
         let m2 = simulation_objects[other_index].body.mass;
 
-        let m1Inv = 1.0 / m1;
-        let m2Inv = 1.0 / m2;
+        let m1_inv = 1.0 / m1;
+        let m2_inv = 1.0 / m2;
 
-        let optimizedP = ((2.0 * (dpNorm1 - dpNorm2)) / (m1Inv + m2Inv))
+        let optimized_p = ((2.0 * (dp_norm_1 - dp_norm_2)) / (m1_inv + m2_inv))
             * simulation_objects[i].material.restitution
             * simulation_objects[other_index].material.restitution;
 
         // Update velocities based on the collision
-        simulation_objects[i].body.velocity.x -= optimizedP * m1Inv * nx;
-        simulation_objects[i].body.velocity.y -= optimizedP * m1Inv * ny;
+        simulation_objects[i].body.velocity.x -= optimized_p * m1_inv * nx;
+        simulation_objects[i].body.velocity.y -= optimized_p * m1_inv * ny;
 
-        simulation_objects[other_index].body.velocity.x += optimizedP * m2Inv * nx;
-        simulation_objects[other_index].body.velocity.y += optimizedP * m2Inv * ny;
+        simulation_objects[other_index].body.velocity.x += optimized_p * m2_inv * nx;
+        simulation_objects[other_index].body.velocity.y += optimized_p * m2_inv * ny;
 
         // Update future_positions based on new velocities
         future_positions[i].x =
@@ -234,69 +224,4 @@ fn circles_intersect(x1: f32, y1: f32, r1: f32, x2: f32, y2: f32, r2: f32) -> bo
     distance_squared <= radii_sum * radii_sum
 }
 
-pub(crate) fn apply_forces_to_temp_object(
-    temp_object: &mut SimulationObject,
-    simulation_objects: &mut Vec<SimulationObject>,
-    temp_simulation_objects: &mut Vec<SimulationObject>,
-)->Vec<SimulationObject> {
-    
-    // Reset acceleration for all temporary objects
-    for object in temp_simulation_objects.iter_mut() {
-        object.body.acceleration = Vector2 { x: 0.0, y: 0.0 };
-    }
-    temp_object.body.acceleration = Vector2 { x: 0.0, y: 0.0 };
-
-    // Calculate gravitational forces for all pairs
-    for i in 0..temp_simulation_objects.len() {
-        for j in 0..simulation_objects.len() {
-            let dx = simulation_objects[j].position.x - temp_simulation_objects[i].position.x;
-            let dy = simulation_objects[j].position.y - temp_simulation_objects[i].position.y;
-            let distance_squared = dx * dx + dy * dy;
-            let distance = distance_squared.sqrt();
-
-            if distance == 0.0 {
-                continue;
-            }
-
-            let force_magnitude = G * (temp_simulation_objects[i].body.mass * simulation_objects[j].body.mass) / distance_squared;
-            let force_x = force_magnitude * dx / distance;
-            let force_y = force_magnitude * dy / distance;
-
-            // Apply the force to temp_simulation_objects[i]
-            apply_force(
-                &mut temp_simulation_objects[i].body,
-                Vector2 {
-                    x: force_x,
-                    y: force_y,
-                },
-            );
-        }
-    }
-
-    // Now apply forces to the temp_object based on all other objects
-    for i in 0..temp_simulation_objects.len() {
-        let dx = temp_simulation_objects[i].position.x - temp_object.position.x;
-        let dy = temp_simulation_objects[i].position.y - temp_object.position.y;
-        let distance_squared = dx * dx + dy * dy;
-        let distance = distance_squared.sqrt();
-
-        if distance == 0.0 {
-            continue;
-        }
-
-        let force_magnitude = G * (temp_object.body.mass * temp_simulation_objects[i].body.mass) / distance_squared;
-        let force_x = force_magnitude * dx / distance;
-        let force_y = force_magnitude * dy / distance;
-
-        // Apply the force to temp_object
-        apply_force(
-            &mut temp_object.body,
-            Vector2 {
-                x: force_x,
-                y: force_y,
-            },
-        );
-    }
-    temp_simulation_objects.clone()
-}
 
