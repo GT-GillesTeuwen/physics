@@ -83,88 +83,66 @@ fn main() {
 
     let mut simulation_objects: Vec<SimulationObject> = Vec::new();
 
+    // for i in 0..500 {
+    //     simulation_objects.push(SimulationObject {
+    //         shape: Circle { radius: 7.0 },
+    //         selected: false,
+    //         position: Vector2 {
+    //             x: (((i % 15) + 1) * 19) as f32,
+    //             y: (((i / 15) + 1) * 19) as f32,
+    //         },
+    //         body: RigidBody {
+    //             mass: 4.0,
+    //             velocity: Vector2 { x: 0.0, y: 0.0 },
+    //             acceleration: Vector2 { x: 0.0, y: 0.0 },
+    //         },
+    //         material: Material {
+    //             restitution: 0.8,
+    //             colour: Color::BLUE,
+    //         },
+    //         history: History { trail: Vec::new() },
+    //     });
+    // }
     simulation_objects.push(SimulationObject {
-        shape: Circle { radius: 10.0 },
+        shape: Circle { radius: 40.0 },
         selected: false,
         position: Vector2 {
-            x: 700.0 as f32,
-            y: 400.0 as f32,
+            x: 500 as f32,
+            y: 200 as f32,
         },
         body: RigidBody {
-            mass: 0.000001,
-            velocity: Vector2 {
-                x: -90.0,
-                y: -435.0,
-            },
+            mass: 100.0,
+            velocity: Vector2 { x: 0.0, y: 0.0 },
             acceleration: Vector2 { x: 0.0, y: 0.0 },
         },
         material: Material {
-            restitution: 1.0,
-            colour: Color::BLUE,
-        },
-        history: History { trail: Vec::new() },
-    });
-    simulation_objects.push(SimulationObject {
-        shape: Circle { radius: 33.0 },
-        selected: false,
-        position: Vector2 {
-            x: 500.0 as f32,
-            y: 400.0 as f32,
-        },
-        body: RigidBody {
-            mass: 1000.0,
-            velocity: Vector2 { x: 20.0, y: 0.0 },
-            acceleration: Vector2 { x: 0.0, y: 0.0 },
-        },
-        material: Material {
-            restitution: 1.0,
+            restitution: 0.8,
             colour: Color::RED,
         },
-
         history: History { trail: Vec::new() },
     });
 
     simulation_objects.push(SimulationObject {
-        shape: Circle { radius: 25.0 },
+        shape: Circle { radius: 40.0 },
         selected: false,
         position: Vector2 {
-            x: 500.0 as f32,
-            y: 50.0 as f32,
+            x: 200 as f32,
+            y: 700 as f32,
         },
         body: RigidBody {
-            mass: 1.0,
-            velocity: Vector2 { x: -410.0, y: 0.0 },
+            mass: 10.0,
+            velocity: Vector2 { x: 0.0, y: 0.0 },
             acceleration: Vector2 { x: 0.0, y: 0.0 },
         },
         material: Material {
-            restitution: 1.0,
+            restitution: 0.8,
             colour: Color::GREEN,
         },
-
         history: History { trail: Vec::new() },
     });
-
-    // simulation_objects.push(SimulationObject {
-    //     shape: Circle { radius: 10.0 },
-    //     selected: false,
-    //     position: Vector2 {
-    //         x: 100.0 as f32,
-    //         y: 200.0 as f32,
-    //     },
-    //     body: RigidBody {
-    //         mass: 50.0,
-    //         velocity: Vector2 { x: 0.0, y: 0.0 },
-    //         acceleration: Vector2 { x: 0.0, y: 0.0 },
-    //     },
-    //     material: Material {
-    //         restitution: 1.0,
-    //         colour: Color::GREEN,
-    //     },
-
-    //     history: History { trail: Vec::new() },
-    // });
-
     simulation_objects[selected_index].selected = true;
+
+    let mut camera_position = Vector2 { x: 0.0, y: 0.0 };
 
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
@@ -184,28 +162,25 @@ fn main() {
 
     let mut mouse_down = false;
 
-
     let mut app_state = AppState::Normal;
-
     let mut predicted_positions = predict(&simulation_objects, &event_pump);
-    let mut velocity_changed = false; // Add this flag
+    let mut repredict_path = false; // Add this flag
     let initial_simulation_objects = simulation_objects.clone();
     let mut just_toggled_menu = false;
     'running: loop {
+        let selected_object = &simulation_objects[selected_index];
+        let dx = screen_width as f32 / 2.0 - selected_object.position.x;
+        let dy = screen_height as f32 / 2.0 - selected_object.position.y;
         let current_ticks = timer_subsystem.ticks();
         let mut delta_time = (current_ticks - last_ticks) as f32 / 1000.0; // in seconds
-        delta_time=0.0075;
+                                                                           //delta_time = 0.0075;
         last_ticks = current_ticks;
 
         for event in event_pump.poll_iter() {
             match &mut app_state {
                 AppState::Normal => {
                     match event {
-                        sdl2::event::Event::Quit { .. }
-                        | sdl2::event::Event::KeyDown {
-                            keycode: Some(sdl2::keyboard::Keycode::Escape),
-                            ..
-                        } => {
+                        sdl2::event::Event::Quit { .. } => {
                             break 'running;
                         }
                         sdl2::event::Event::KeyDown {
@@ -281,7 +256,7 @@ fn main() {
                                 0.0,
                                 -5.0,
                             );
-                            velocity_changed = true;
+                            repredict_path = true;
                         }
                         sdl2::event::Event::KeyDown {
                             keycode: Some(sdl2::keyboard::Keycode::Down),
@@ -293,7 +268,7 @@ fn main() {
                                 0.0,
                                 5.0,
                             );
-                            velocity_changed = true;
+                            repredict_path = true;
                         }
                         sdl2::event::Event::KeyDown {
                             keycode: Some(sdl2::keyboard::Keycode::Left),
@@ -305,7 +280,7 @@ fn main() {
                                 -5.0,
                                 0.0,
                             );
-                            velocity_changed = true;
+                            repredict_path = true;
                         }
                         sdl2::event::Event::KeyDown {
                             keycode: Some(sdl2::keyboard::Keycode::Right),
@@ -317,7 +292,7 @@ fn main() {
                                 5.0,
                                 0.0,
                             );
-                            velocity_changed = true;
+                            repredict_path = true;
                         }
                         sdl2::event::Event::KeyDown {
                             keycode: Some(sdl2::keyboard::Keycode::R),
@@ -327,7 +302,7 @@ fn main() {
                                 &mut simulation_objects,
                                 &initial_simulation_objects,
                             );
-                            velocity_changed = true;
+                            repredict_path = true;
                         }
                         sdl2::event::Event::KeyDown {
                             keycode: Some(sdl2::keyboard::Keycode::M),
@@ -347,6 +322,17 @@ fn main() {
                                 }
                             }
                         }
+                        sdl2::event::Event::KeyDown {
+                            keycode: Some(sdl2::keyboard::Keycode::C),
+                            ..
+                        } => {
+                            let selected_object = &simulation_objects[selected_index];
+                            camera_position.x =
+                                (selected_object.position.x - screen_width as f32 / 2.0);
+                            camera_position.y =
+                                (selected_object.position.y - screen_height as f32 / 2.0);
+                            repredict_path = true;
+                        }
                         _ => {}
                     }
                     continue;
@@ -362,21 +348,21 @@ fn main() {
                                 if let Ok(value) = input.parse::<f32>() {
                                     match field {
                                         EditableField::Mass => {
-                                            simulation_objects[*index].body.mass = value; 
+                                            simulation_objects[*index].body.mass = value;
                                         }
                                         EditableField::VelocityX => {
-                                            simulation_objects[*index].body.velocity.x = value; 
+                                            simulation_objects[*index].body.velocity.x = value;
                                         }
                                         EditableField::VelocityY => todo!(),
                                         EditableField::PositionX => {
-                                            simulation_objects[*index].position.x = value; 
-                                        },
+                                            simulation_objects[*index].position.x = value;
+                                        }
                                         EditableField::PositionY => todo!(),
                                         EditableField::Radius => todo!(),
                                     }
                                 }
                                 app_state = AppState::Normal;
-                                velocity_changed=true;
+                                repredict_path = true;
                             }
                             sdl2::event::Event::KeyDown {
                                 keycode: Some(sdl2::keyboard::Keycode::Backspace),
@@ -398,62 +384,84 @@ fn main() {
                                 ..
                             } => {
                                 app_state = AppState::Normal;
-                            }sdl2::event::Event::MouseButtonDown { x, y, .. } => {
+                            }
+                            sdl2::event::Event::MouseButtonDown { x, y, .. } => {
                                 mouse_down = true;
                                 events::handle_mouse_down(
                                     x,
                                     y,
                                     &mut prev_mouse_pos,
                                     &mut simulation_objects,
-                                    index,  // Pass the selected index from the menu state
+                                    index, // Pass the selected index from the menu state
                                 );
-                            },
+                            }
                             sdl2::event::Event::MouseButtonUp { .. } => {
                                 mouse_down = false;
                                 events::handle_mouse_up();
-                            },
+                            }
                             sdl2::event::Event::MouseMotion { x, y, .. } => {
                                 if mouse_down {
-                                    let current_mouse_pos = Vector2 { x: x as f32, y: y as f32 };
+                                    let current_mouse_pos = Vector2 {
+                                        x: x as f32,
+                                        y: y as f32,
+                                    };
                                     let dx = current_mouse_pos.x - prev_mouse_pos.x;
                                     let dy = current_mouse_pos.y - prev_mouse_pos.y;
-        
+
                                     // Update only the selected object's position
                                     simulation_objects[*index].position.x += dx;
                                     simulation_objects[*index].position.y += dy;
-        
+
                                     prev_mouse_pos = current_mouse_pos;
-                                    velocity_changed=true;
+                                    repredict_path = true;
                                 }
-                            },
-        
+                            }
+
                             _ => {}
                         }
                     }
-                }
+                },
             }
         }
 
-        if velocity_changed {
+        if repredict_path {
             predicted_positions = predict(&simulation_objects, &event_pump);
-            velocity_changed = false; // Reset the flag
+            repredict_path = false; // Reset the flag
         }
 
         if !is_paused || single_step {
             single_step = false;
 
+            for i in 1..=8{
             physics::update_simulation(
                 &mut simulation_objects,
-                delta_time,
+                (delta_time/8.0),
                 selected_index,
                 &event_pump,
             );
+        }
+            for object in simulation_objects.iter_mut() {
+                object.position.x += dx;
+                object.position.y += dy;
+                // Update all trail positions (assuming trails is a Vec<Vector2>)
+                for trail in &mut object.history.trail {
+                    trail.x += dx;
+                    trail.y += dy;
+                }
+            }
+
+            for object_pos in &mut predicted_positions {
+                for pos in object_pos{
+                    pos.x+=dx;
+                    pos.y+=dy;
+                }
+            }
         }
 
         canvas.set_draw_color(Color::RGB(0, 0, 0));
         canvas.clear();
 
-        if is_paused {
+        if predicted_positions.len() > 0 && is_paused {
             for object_index in 0..predicted_positions[0].len() {
                 for i in 0..(predicted_positions.len() - 1) {
                     let start_pos = &predicted_positions[i][object_index];
@@ -465,7 +473,7 @@ fn main() {
                             start_pos.y as i16,
                             end_pos.x as i16,
                             end_pos.y as i16,
-                            Color::RGB(0, 255, 0), // Replace with your own color logic
+                            simulation_objects[object_index].material.colour, // Replace with your own color logic
                         )
                         .unwrap();
                 }
@@ -570,7 +578,7 @@ fn predict(
     // Initialize an array to store the predicted positions
     let mut predicted_positions: Vec<Vec<Vector2>> = Vec::new();
     // Simulate the next N steps
-    let steps = 3000;
+    let steps = 30000;
     let mut temp_simulation_objects = simulation_objects.clone();
     for _ in 0..steps {
         let mut future_positions: Vec<Vector2> = Vec::new();

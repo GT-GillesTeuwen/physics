@@ -3,6 +3,7 @@ use sdl2::{keyboard::Scancode, EventPump};
 use crate::{RigidBody, SimulationObject, Vector2};
 
 const G: f32 = 10000.0;
+const MAX_VELOCITY: f32 = 1000.0; // Choose an appropriate value
 
 pub fn update_simulation(
     objects: &mut Vec<SimulationObject>,
@@ -47,8 +48,8 @@ pub fn apply_forces(
 
     for i in 0..simulation_objects.len() {
         for j in i + 1..simulation_objects.len() {
-            let dx = simulation_objects[j].position.x - simulation_objects[i].position.x;
-            let dy = simulation_objects[j].position.y - simulation_objects[i].position.y;
+            let dx = (simulation_objects[j].position.x - simulation_objects[i].position.x);
+            let dy = (simulation_objects[j].position.y - simulation_objects[i].position.y);
             let distance_squared = dx * dx + dy * dy;
             let distance = distance_squared.sqrt();
 
@@ -56,12 +57,13 @@ pub fn apply_forces(
                 continue; // Skip if distance is zero to avoid division by zero
             }
 
-            let force_magnitude = G
+            let force_magnitude =G
                 * (simulation_objects[i].body.mass * simulation_objects[j].body.mass)
                 / distance_squared;
 
             let force_x = force_magnitude * dx / distance;
             let force_y = force_magnitude * dy / distance;
+
 
             // Apply the force to both objects
             apply_force(
@@ -82,6 +84,7 @@ pub fn apply_forces(
     }
 
     for object in simulation_objects.iter_mut() {
+        //apply_force(&mut object.body, Vector2 { x: 0.0, y: 100.0 });
         if object.selected {
             apply_force(&mut object.body, force);
         }
@@ -135,8 +138,6 @@ pub fn handle_collisions(simulation_objects: &mut Vec<SimulationObject>, delta_t
 
         let nx = dx / distance;
         let ny = dy / distance;
-
-       
 
         let dp_norm_1 =
             simulation_objects[i].body.velocity.x * nx + simulation_objects[i].body.velocity.y * ny;
@@ -193,21 +194,48 @@ pub fn handle_collisions(simulation_objects: &mut Vec<SimulationObject>, delta_t
         }
     }
 
-    update_pos_and_vel(simulation_objects,&mut future_positions)
+    for (i, object) in simulation_objects.iter_mut().enumerate() {
+        // // Handle X-axis wall collision
+        // if future_positions[i].x - object.shape.radius < 0.0
+        //     || future_positions[i].x + object.shape.radius > 1000 as f32
+        // {
+        //     object.body.velocity.x = -object.body.velocity.x;
+        //     future_positions[i].x = object.position.x; // Reset to current position
+        // }
 
-   
+        // // Handle Y-axis wall collision
+        // if future_positions[i].y - object.shape.radius < 0.0
+        //     || future_positions[i].y + object.shape.radius > 800 as f32
+        // {
+        //     object.body.velocity.y = -object.body.velocity.y;
+        //     future_positions[i].y = object.position.y; // Reset to current position
+        // }
+
+        object.position = future_positions[i]; // Update to future position
+    }
+
+    update_pos_and_vel(simulation_objects, &mut future_positions)
 }
 
-pub fn update_pos_and_vel(simulation_objects: &mut Vec<SimulationObject>,future_positions: &mut Vec<Vector2>){
-     // Step 4: Update positions and velocities for all objects
-     for (i, object) in simulation_objects.iter_mut().enumerate() {
+pub fn update_pos_and_vel(
+    simulation_objects: &mut Vec<SimulationObject>,
+    future_positions: &mut Vec<Vector2>,
+) {
+    // Step 4: Update positions and velocities for all objects
+    for (i, object) in simulation_objects.iter_mut().enumerate() {
         object.position = future_positions[i];
 
         if object.history.trail.len() > 10000 {
             // Keep only the last 100 positions
             object.history.trail.remove(0);
         }
-        object.history.trail.push(object.position);
+        //object.history.trail.push(object.position);
+    }
+
+    for object in simulation_objects.iter_mut() {
+        object.body.velocity.x = object.body.velocity.x.min(MAX_VELOCITY).max(-MAX_VELOCITY);
+        object.body.velocity.y = object.body.velocity.y.min(MAX_VELOCITY).max(-MAX_VELOCITY);
+        
     }
 }
 
@@ -223,5 +251,3 @@ fn circles_intersect(x1: f32, y1: f32, r1: f32, x2: f32, y2: f32, r2: f32) -> bo
     let radii_sum = r1 + r2;
     distance_squared <= radii_sum * radii_sum
 }
-
-
