@@ -7,3 +7,6 @@ edition = "2021"
 
 [dependencies]
 sdl2 = {"version"="0.35.2",features = ["static-link", "use-vcpkg", "gfx","ttf"]}
+rayon="1.5.1"
+rand ="*"
+rand_pcg = "0.3"
